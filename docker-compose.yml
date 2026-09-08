@@ -1,0 +1,20 @@
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: crearte-sqlserver
+
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: "Developer"
+      MSSQL_SA_PASSWORD: "CrearteDev_2026!Secure"
+
+    ports:
+      - "1433:1433"
+
+    volumes:
+      - crearte_sql_data:/var/opt/mssql
+
+    restart: unless-stopped
+
+volumes:
+  crearte_sql_data:

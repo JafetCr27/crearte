@@ -1,0 +1,623 @@
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "sqlserver"
+}
+
+// ============================================================
+// SECURITY
+// ============================================================
+
+model User {
+  id           String    @id @default(uuid()) @db.UniqueIdentifier
+  email        String    @unique @db.NVarChar(320)
+  passwordHash String    @db.NVarChar(255)
+  firstName    String    @db.NVarChar(100)
+  lastName     String    @db.NVarChar(100)
+  phone        String?   @db.NVarChar(30)
+  isActive     Boolean   @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  customer          Customer?
+  userRoles         UserRole[]
+  designAssignments DesignAssignment[] @relation("AssignedDesigner")
+  designRevisions   DesignRevision[]   @relation("RevisionCreatedBy")
+  uploadedFiles     File[]             @relation("FileUploadedBy")
+
+  @@index([email])
+  @@index([isActive])
+}
+
+model Role {
+  id          String   @id @default(uuid()) @db.UniqueIdentifier
+  code        String   @unique @db.VarChar(50)
+  name        String   @db.NVarChar(100)
+  description String?  @db.NVarChar(500)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  userRoles UserRole[]
+}
+
+model UserRole {
+  id        String   @id @default(uuid()) @db.UniqueIdentifier
+  userId    String   @db.UniqueIdentifier
+  roleId    String   @db.UniqueIdentifier
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([userId, roleId])
+  @@index([userId])
+  @@index([roleId])
+}
+
+// ============================================================
+// CUSTOMERS
+// ============================================================
+
+model Customer {
+  id                   String   @id @default(uuid()) @db.UniqueIdentifier
+  userId               String?  @unique @db.UniqueIdentifier
+  firstName            String   @db.NVarChar(100)
+  lastName             String   @db.NVarChar(100)
+  email                String   @db.NVarChar(320)
+  phone                String?  @db.NVarChar(30)
+  identificationNumber String?  @db.NVarChar(30)
+  isActive             Boolean  @default(true)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  user User? @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  addresses      Address[]
+  carts          Cart[]
+  orders         Order[]
+  designRequests DesignRequest[]
+
+  @@index([email])
+  @@index([phone])
+  @@index([isActive])
+}
+
+model Address {
+  id            String  @id @default(uuid()) @db.UniqueIdentifier
+  customerId    String  @db.UniqueIdentifier
+  name          String  @db.NVarChar(100)
+  recipientName String  @db.NVarChar(200)
+  phone         String? @db.NVarChar(30)
+
+  province     String  @db.NVarChar(100)
+  canton       String  @db.NVarChar(100)
+  district     String  @db.NVarChar(100)
+  addressLine1 String  @db.NVarChar(500)
+  addressLine2 String? @db.NVarChar(500)
+  reference    String? @db.NVarChar(500)
+
+  isDefault Boolean @default(false)
+  isActive  Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([customerId])
+  @@index([province, canton, district])
+}
+
+// ============================================================
+// CATALOG
+// ============================================================
+
+model Category {
+  id          String  @id @default(uuid()) @db.UniqueIdentifier
+  code        String  @unique @db.VarChar(50)
+  name        String  @db.NVarChar(150)
+  description String? @db.NVarChar(500)
+  sortOrder   Int     @default(0)
+  isActive    Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  products Product[]
+
+  @@index([isActive])
+  @@index([sortOrder])
+}
+
+model Product {
+  id         String @id @default(uuid()) @db.UniqueIdentifier
+  categoryId String @db.UniqueIdentifier
+
+  sku         String  @unique @db.VarChar(100)
+  name        String  @db.NVarChar(200)
+  slug        String  @unique @db.VarChar(250)
+  description String? @db.NVarChar(2000)
+
+  basePrice Decimal @db.Decimal(18, 2)
+
+  isCustomizable Boolean @default(false)
+  isActive       Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  category Category @relation(fields: [categoryId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  images     ProductImage[]
+  options    ProductOption[]
+  orderItems OrderItem[]
+  cartItems  CartItem[]
+
+  @@index([categoryId])
+  @@index([isActive])
+  @@index([name])
+}
+
+model ProductImage {
+  id        String @id @default(uuid()) @db.UniqueIdentifier
+  productId String @db.UniqueIdentifier
+
+  storageKey  String  @db.NVarChar(500)
+  fileName    String  @db.NVarChar(255)
+  contentType String  @db.VarChar(100)
+  altText     String? @db.NVarChar(255)
+
+  sortOrder Int     @default(0)
+  isPrimary Boolean @default(false)
+  isActive  Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([productId])
+  @@index([productId, sortOrder])
+}
+
+model ProductOption {
+  id        String @id @default(uuid()) @db.UniqueIdentifier
+  productId String @db.UniqueIdentifier
+
+  code        String  @db.VarChar(50)
+  name        String  @db.NVarChar(150)
+  description String? @db.NVarChar(500)
+
+  isRequired Boolean @default(false)
+  sortOrder  Int     @default(0)
+  isActive   Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  values ProductOptionValue[]
+
+  @@unique([productId, code])
+  @@index([productId])
+}
+
+model ProductOptionValue {
+  id              String @id @default(uuid()) @db.UniqueIdentifier
+  productOptionId String @db.UniqueIdentifier
+
+  code  String  @db.VarChar(50)
+  name  String  @db.NVarChar(150)
+  value String? @db.NVarChar(500)
+
+  priceModifier Decimal @default(0) @db.Decimal(18, 2)
+
+  sortOrder Int     @default(0)
+  isActive  Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  productOption ProductOption @relation(fields: [productOptionId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  cartItemOptions  CartItemOption[]
+  orderItemOptions OrderItemOption[]
+
+  @@unique([productOptionId, code])
+  @@index([productOptionId])
+}
+
+// ============================================================
+// SHOPPING CART
+// ============================================================
+
+model Cart {
+  id         String @id @default(uuid()) @db.UniqueIdentifier
+  customerId String @db.UniqueIdentifier
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  items CartItem[]
+
+  @@index([customerId])
+}
+
+model CartItem {
+  id        String @id @default(uuid()) @db.UniqueIdentifier
+  cartId    String @db.UniqueIdentifier
+  productId String @db.UniqueIdentifier
+
+  quantity Int @default(1)
+
+  unitPrice Decimal @db.Decimal(18, 2)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  cart Cart @relation(fields: [cartId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  product Product @relation(fields: [productId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  options CartItemOption[]
+
+  @@index([cartId])
+  @@index([productId])
+}
+
+model CartItemOption {
+  id                   String @id @default(uuid()) @db.UniqueIdentifier
+  cartItemId           String @db.UniqueIdentifier
+  productOptionValueId String @db.UniqueIdentifier
+
+  optionName    String  @db.NVarChar(150)
+  valueName     String  @db.NVarChar(150)
+  priceModifier Decimal @default(0) @db.Decimal(18, 2)
+
+  createdAt DateTime @default(now())
+
+  cartItem CartItem @relation(fields: [cartItemId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  productOptionValue ProductOptionValue @relation(fields: [productOptionValueId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([cartItemId])
+  @@index([productOptionValueId])
+}
+
+// ============================================================
+// ORDERS
+// ============================================================
+
+model Order {
+  id         String @id @default(uuid()) @db.UniqueIdentifier
+  customerId String @db.UniqueIdentifier
+
+  orderNumber String @unique @db.VarChar(30)
+
+  status String @db.VarChar(50)
+
+  subtotal     Decimal @db.Decimal(18, 2)
+  shippingCost Decimal @default(0) @db.Decimal(18, 2)
+  discount     Decimal @default(0) @db.Decimal(18, 2)
+  tax          Decimal @default(0) @db.Decimal(18, 2)
+  total        Decimal @db.Decimal(18, 2)
+
+  // Snapshot de la dirección de entrega
+  recipientName  String? @db.NVarChar(200)
+  recipientPhone String? @db.NVarChar(30)
+
+  province     String? @db.NVarChar(100)
+  canton       String? @db.NVarChar(100)
+  district     String? @db.NVarChar(100)
+  addressLine1 String? @db.NVarChar(500)
+  addressLine2 String? @db.NVarChar(500)
+  reference    String? @db.NVarChar(500)
+
+  shippingMethodId String? @db.UniqueIdentifier
+  shippingZoneId   String? @db.UniqueIdentifier
+
+  notes String? @db.NVarChar(1000)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  shippingMethod ShippingMethod? @relation(fields: [shippingMethodId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  shippingZone ShippingZone? @relation(fields: [shippingZoneId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  items         OrderItem[]
+  statusHistory OrderStatusHistory[]
+  payment       Payment?
+
+  @@index([customerId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([shippingMethodId])
+  @@index([shippingZoneId])
+}
+
+model OrderItem {
+  id        String @id @default(uuid()) @db.UniqueIdentifier
+  orderId   String @db.UniqueIdentifier
+  productId String @db.UniqueIdentifier
+
+  // Snapshot histórico
+  productName String @db.NVarChar(200)
+  sku         String @db.VarChar(100)
+
+  quantity Int
+
+  unitPrice Decimal @db.Decimal(18, 2)
+  subtotal  Decimal @db.Decimal(18, 2)
+
+  createdAt DateTime @default(now())
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  product Product @relation(fields: [productId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  options OrderItemOption[]
+
+  @@index([orderId])
+  @@index([productId])
+}
+
+model OrderItemOption {
+  id                   String  @id @default(uuid()) @db.UniqueIdentifier
+  orderItemId          String  @db.UniqueIdentifier
+  productOptionValueId String? @db.UniqueIdentifier
+
+  // Snapshot histórico
+  optionName    String  @db.NVarChar(150)
+  valueName     String  @db.NVarChar(150)
+  priceModifier Decimal @default(0) @db.Decimal(18, 2)
+
+  createdAt DateTime @default(now())
+
+  orderItem OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  productOptionValue ProductOptionValue? @relation(fields: [productOptionValueId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([orderItemId])
+  @@index([productOptionValueId])
+}
+
+model OrderStatusHistory {
+  id      String @id @default(uuid()) @db.UniqueIdentifier
+  orderId String @db.UniqueIdentifier
+
+  status  String  @db.VarChar(50)
+  comment String? @db.NVarChar(1000)
+
+  createdAt DateTime @default(now())
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([orderId])
+  @@index([orderId, createdAt])
+}
+
+model Payment {
+  id      String @id @default(uuid()) @db.UniqueIdentifier
+  orderId String @unique @db.UniqueIdentifier
+
+  status String @db.VarChar(50)
+  method String @db.VarChar(50)
+
+  amount   Decimal @db.Decimal(18, 2)
+  currency String  @default("CRC") @db.Char(3)
+
+  transactionId String? @db.NVarChar(255)
+  provider      String? @db.NVarChar(100)
+
+  paidAt        DateTime?
+  failureReason String?   @db.NVarChar(1000)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([status])
+  @@index([transactionId])
+}
+
+// ============================================================
+// SHIPPING
+// ============================================================
+
+model ShippingMethod {
+  id String @id @default(uuid()) @db.UniqueIdentifier
+
+  code        String  @unique @db.VarChar(50)
+  name        String  @db.NVarChar(150)
+  description String? @db.NVarChar(500)
+
+  type String @db.VarChar(30)
+
+  basePrice Decimal @default(0) @db.Decimal(18, 2)
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  orders Order[]
+
+  @@index([type])
+  @@index([isActive])
+}
+
+model ShippingZone {
+  id String @id @default(uuid()) @db.UniqueIdentifier
+
+  code        String  @unique @db.VarChar(50)
+  name        String  @db.NVarChar(150)
+  description String? @db.NVarChar(500)
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  orders Order[]
+
+  @@index([isActive])
+}
+
+// ============================================================
+// DESIGN SERVICES
+// ============================================================
+
+model DesignService {
+  id String @id @default(uuid()) @db.UniqueIdentifier
+
+  code        String  @unique @db.VarChar(50)
+  name        String  @db.NVarChar(200)
+  description String? @db.NVarChar(2000)
+
+  basePrice Decimal? @db.Decimal(18, 2)
+
+  requiresQuote Boolean @default(true)
+  isActive      Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  requests DesignRequest[]
+
+  @@index([isActive])
+}
+
+model DesignRequest {
+  id              String @id @default(uuid()) @db.UniqueIdentifier
+  customerId      String @db.UniqueIdentifier
+  designServiceId String @db.UniqueIdentifier
+
+  requestNumber String @unique @db.VarChar(30)
+
+  status String @db.VarChar(50)
+
+  title       String @db.NVarChar(200)
+  description String @db.NVarChar(3000)
+
+  quotedPrice Decimal? @db.Decimal(18, 2)
+
+  customerNotes String? @db.NVarChar(2000)
+  internalNotes String? @db.NVarChar(2000)
+
+  approvedAt  DateTime?
+  completedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  designService DesignService @relation(fields: [designServiceId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  assignments DesignAssignment[]
+  revisions   DesignRevision[]
+  files       File[]             @relation("RequestFiles")
+
+  @@index([customerId])
+  @@index([designServiceId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model DesignAssignment {
+  id              String @id @default(uuid()) @db.UniqueIdentifier
+  designRequestId String @db.UniqueIdentifier
+  designerId      String @db.UniqueIdentifier
+
+  status String @db.VarChar(50)
+
+  assignedAt  DateTime  @default(now())
+  completedAt DateTime?
+
+  notes String? @db.NVarChar(1000)
+
+  designRequest DesignRequest @relation(fields: [designRequestId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  designer User @relation("AssignedDesigner", fields: [designerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([designRequestId])
+  @@index([designerId])
+  @@index([status])
+}
+
+model DesignRevision {
+  id              String @id @default(uuid()) @db.UniqueIdentifier
+  designRequestId String @db.UniqueIdentifier
+  createdById     String @db.UniqueIdentifier
+
+  version Int
+  status  String @db.VarChar(50)
+
+  comment String? @db.NVarChar(2000)
+
+  createdAt DateTime @default(now())
+
+  designRequest DesignRequest @relation(fields: [designRequestId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  createdBy User @relation("RevisionCreatedBy", fields: [createdById], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  files File[] @relation("RevisionFiles")
+
+  @@unique([designRequestId, version])
+  @@index([designRequestId])
+  @@index([createdById])
+}
+
+// ============================================================
+// FILES / AZURE BLOB STORAGE
+// ============================================================
+
+model File {
+  id String @id @default(uuid()) @db.UniqueIdentifier
+
+  designRequestId  String? @db.UniqueIdentifier
+  designRevisionId String? @db.UniqueIdentifier
+
+  uploadedById String @db.UniqueIdentifier
+
+  storageProvider String @default("AZURE_BLOB") @db.VarChar(50)
+  containerName   String @db.NVarChar(255)
+  storageKey      String @db.NVarChar(1000)
+
+  fileName    String  @db.NVarChar(255)
+  contentType String  @db.VarChar(150)
+  extension   String? @db.VarChar(20)
+  sizeBytes   BigInt
+
+  description String? @db.NVarChar(500)
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  designRequest DesignRequest? @relation("RequestFiles", fields: [designRequestId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  designRevision DesignRevision? @relation("RevisionFiles", fields: [designRevisionId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  uploadedBy User @relation("FileUploadedBy", fields: [uploadedById], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([designRequestId])
+  @@index([designRevisionId])
+  @@index([uploadedById])
+  @@index([createdAt])
+}
